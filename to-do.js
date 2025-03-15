@@ -1,144 +1,119 @@
-let todos = [];
-        let editingId = null;
-
-      
-        function loadTodos() {
-            const savedTodos = localStorage.getItem('todos');
-            if (savedTodos) {
-                todos = JSON.parse(savedTodos);
-                renderTodos();
-                updateStats();
+class TodoList {
+            constructor() {
+                this.tasks = JSON.parse(localStorage.getItem('tasks') || '[]');
+                this.filter = 'all';
+                this.initializeElements();
+                this.addEventListeners();
+                this.render();
             }
-        }
 
-       
-        function saveTodos() {
-            localStorage.setItem('todos', JSON.stringify(todos));
-            updateStats();
-        }
+            initializeElements() {
+                this.newTaskInput = document.getElementById('newTask');
+                this.dateInput = document.getElementById('datepicker');
+                this.addButton = document.getElementById('addTask');
+                this.taskList = document.getElementById('taskList');
+                this.filterButton = document.getElementById('filterButton');
+                this.filterModal = document.getElementById('filterModal');
+                this.taskCount = document.querySelector('.task-count');
 
-        function addTodo() {
-            const input = document.getElementById('todoInput');
-            const category = document.getElementById('categorySelect').value;
-            const priority = document.getElementById('prioritySelect').value;
-            const text = input.value.trim();
+                // Set default date to today
+                const today = new Date().toISOString().split('T')[0];
+                this.dateInput.value = today;
+            }
 
-            if (text) {
-                if (editingId !== null) {
-                   
-                    const todoIndex = todos.findIndex(todo => todo.id === editingId);
-                    if (todoIndex !== -1) {
-                        todos[todoIndex] = {
-                            ...todos[todoIndex],
-                            text,
-                            category,
-                            priority,
-                            updatedAt: new Date().toISOString()
-                        };
+            addEventListeners() {
+                this.addButton.addEventListener('click', () => this.addTask());
+                this.filterButton.addEventListener('click', () => this.toggleFilterModal());
+                
+                document.querySelectorAll('input[name="filter"]').forEach(radio => {
+                    radio.addEventListener('change', (e) => {
+                        this.filter = e.target.value;
+                        this.filterButton.textContent = `Filter: ${this.filter}`;
+                        this.toggleFilterModal();
+                        this.render();
+                    });
+                });
+
+                // Close modal when clicking outside
+                this.filterModal.addEventListener('click', (e) => {
+                    if (e.target === this.filterModal) {
+                        this.toggleFilterModal();
                     }
-                    editingId = null;
-                } else {
-                    
-                    const newTodo = {
-                        id: Date.now(),
-                        text,
-                        category,
-                        priority,
+                });
+            }
+
+            toggleFilterModal() {
+                this.filterModal.style.display = 
+                    this.filterModal.style.display === 'block' ? 'none' : 'block';
+            }
+
+            addTask() {
+                const text = this.newTaskInput.value.trim();
+                const dueDate = this.dateInput.value;
+                
+                if (text && dueDate) {
+                    const task = {
+                        id: Date.now().toString(),
+                        text: text,
                         completed: false,
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString()
+                        dueDate: new Date(dueDate)
                     };
-                    todos.unshift(newTodo);
+
+                    this.tasks.push(task);
+                    this.saveTasks();
+                    this.newTaskInput.value = '';
+                    this.render();
                 }
+            }
 
-                input.value = '';
-                saveTodos();
-                renderTodos();
+            toggleTask(id) {
+                this.tasks = this.tasks.map(task =>
+                    task.id === id ? { ...task, completed: !task.completed } : task
+                );
+                this.saveTasks();
+                this.render();
+            }
+
+            deleteTask(id) {
+                this.tasks = this.tasks.filter(task => task.id !== id);
+                this.saveTasks();
+                this.render();
+            }
+
+            saveTasks() {
+                localStorage.setItem('tasks', JSON.stringify(this.tasks));
+            }
+
+            formatDate(date) {
+                const d = new Date(date);
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                return `${months[d.getMonth()]} ${d.getDate()}`;
+            }
+
+            render() {
+                const filteredTasks = this.tasks.filter(task => {
+                    if (this.filter === 'all') return true;
+                    if (this.filter === 'active') return !task.completed;
+                    if (this.filter === 'completed') return task.completed;
+                    return true;
+                });
+
+                this.taskList.innerHTML = filteredTasks.map(task => `
+                    <li class="task-item ${task.completed ? 'completed' : ''}" data-id="${task.id}">
+                        <div class="task-content">
+                            <div class="checkbox" onclick="todoList.toggleTask('${task.id}')"></div>
+                            <span class="task-text">${task.text}</span>
+                        </div>
+                        <div class="task-actions">
+                            <span class="task-date">${this.formatDate(task.dueDate)}</span>
+                            <button onclick="todoList.deleteTask('${task.id}')">x</button>
+                        </div>
+                    </li>
+                `).join('');
+
+                this.taskCount.textContent = `${filteredTasks.length} tasks`;
             }
         }
 
-        function toggleTodo(id) {
-            const todo = todos.find(t => t.id === id);
-            if (todo) {
-                todo.completed = !todo.completed;
-                todo.updatedAt = new Date().toISOString();
-                saveTodos();
-                renderTodos();
-            }
-        }
-
-        function deleteTodo(id) {
-            todos = todos.filter(todo => todo.id !== id);
-            saveTodos();
-            renderTodos();
-        }
-
-        function editTodo(id) {
-            const todo = todos.find(t => t.id === id);
-            if (todo) {
-                editingId = id;
-                document.getElementById('todoInput').value = todo.text;
-                document.getElementById('categorySelect').value = todo.category;
-                document.getElementById('prioritySelect').value = todo.priority;
-            }
-        }
-
-        function applyFilters() {
-            renderTodos();
-        }
-
-        function getFilteredTodos() {
-            const categoryFilter = document.getElementById('filterCategory').value;
-            const priorityFilter = document.getElementById('filterPriority').value;
-            const statusFilter = document.getElementById('filterStatus').value;
-
-            return todos.filter(todo => {
-                const categoryMatch = categoryFilter === 'all' || todo.category === categoryFilter;
-                const priorityMatch = priorityFilter === 'all' || todo.priority === priorityFilter;
-                const statusMatch = statusFilter === 'all' || 
-                    (statusFilter === 'completed' && todo.completed) || 
-                    (statusFilter === 'active' && !todo.completed);
-
-                return categoryMatch && priorityMatch && statusMatch;
-            });
-        }
-
-        function renderTodos() {
-            const todoList = document.getElementById('todoList');
-            const filteredTodos = getFilteredTodos();
-
-            todoList.innerHTML = filteredTodos.map(todo => `
-                <div class="todo-item ${todo.completed ? 'completed' : ''}">
-                    <input type="checkbox";
-                           ${todo.completed ? 'checked' : ''} 
-                           onchange="toggleTodo(${todo.id})">
-                    <span class="todo-text">${todo.text}</span>
-                    <span class="category-tag">${todo.category}</span>
-                    <span class="priority-${todo.priority}">
-                        ${todo.priority.charAt(0).toUpperCase() + todo.priority.slice(1)}
-                    </span>
-                    <div class="todo-actions">
-                        <button class="edit-btn" onclick="editTodo(${todo.id})">Edit</button>
-                        <button class="delete-btn" onclick="deleteTodo(${todo.id})">Delets</button>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        function updateStats() {
-            const totalTasks = todos.length;
-            const completedTasks = todos.filter(todo => todo.completed).length;
-            const pendingTasks = totalTasks - completedTasks;
-
-            document.getElementById('totalTasks').textContent = totalTasks;
-            document.getElementById('completedTasks').textContent = completedTasks;
-            document.getElementById('pendingTasks').textContent = pendingTasks;
-        }
-
-        document.getElementById('todoInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                addTodo();
-            }
-        });
-
-        loadTodos();
+        const todoList = new TodoList();
